@@ -1,482 +1,515 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Utensils, Landmark, Camera, Plus, Trash2, CheckCircle2, Circle, MapPin, ChevronDown, Store, FastForward, ExternalLink, Edit3, Check, Ticket, HandCoins, Link } from 'lucide-react';
-
-const App = () => {
-  const [items, setItems] = useState([
-    { 
-      id: 1, 
-      category: 'food', 
-      name: 'フィッシュ＆チップス', 
-      spot: 'London',
-      mapUrl: '', // URLを保存するフィールドを追加
-      completed: false,
-      isFree: false,
-      needsReservation: false,
-      shops: [
-        { id: 101, name: 'Borough Market', location: 'London Bridge', mapUrl: '', completed: false },
-        { id: 102, name: 'Poppies Fish & Chips', location: 'Spitalfields', mapUrl: '', completed: false }
-      ]
-    },
-    { 
-      id: 2, 
-      category: 'food', 
-      name: 'アフタヌーンティー', 
-      spot: 'London',
-      mapUrl: '',
-      completed: false,
-      isFree: false,
-      needsReservation: true,
-      shops: [
-        { id: 201, name: 'Fortnum & Mason', location: 'Piccadilly', mapUrl: '', completed: false },
-        { id: 202, name: 'The Ritz', location: 'Green Park', mapUrl: '', completed: false }
-      ]
-    },
-    { 
-      id: 3, 
-      category: 'museum', 
-      name: '大英博物館', 
-      spot: 'British Museum', 
-      mapUrl: 'https://maps.app.goo.gl/9R6v8zXmKzG3',
-      completed: false, 
-      isFree: true, 
-      needsReservation: true 
-    },
-  ]);
-
-  const [activeTab, setActiveTab] = useState('all');
-  const [expandedId, setExpandedId] = useState(null);
-  const [newItem, setNewItem] = useState({ name: '', spot: '', mapUrl: '', category: 'food', isFree: false, needsReservation: false });
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const categoryRef = useRef(null);
-  
-  const [editingId, setEditingId] = useState(null); 
-  const [editingShopId, setEditingShopId] = useState(null); 
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (categoryRef.current && !categoryRef.current.contains(event.target)) {
-        setIsCategoryOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const handleOpenMap = (name, location, savedUrl) => {
-    if (savedUrl && savedUrl.trim() !== '') {
-      // 保存されたURLがある場合はそれを開く
-      window.open(savedUrl.startsWith('http') ? savedUrl : `https://${savedUrl}`, '_blank');
-    } else {
-      // ない場合は検索を行う
-      const query = `${name} ${location}`.trim();
-      const searchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-      window.open(searchUrl, '_blank');
-    }
-  };
-
-  const addItem = (e) => {
-    e.preventDefault();
-    if (!newItem.name) return;
-    const item = {
-      ...newItem,
-      id: Date.now(),
-      completed: false,
-      shops: newItem.category === 'food' ? [] : undefined
-    };
-    setItems([item, ...items]);
-    setNewItem({ name: '', spot: '', mapUrl: '', category: 'food', isFree: false, needsReservation: false });
-  };
-
-  const updateItem = (id, field, value) => {
-    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
-  };
-
-  const updateShop = (itemId, shopId, field, value) => {
-    setItems(items.map(item => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          shops: item.shops.map(s => s.id === shopId ? { ...s, [field]: value } : s)
-        };
-      }
-      return item;
-    }));
-  };
-
-  const addShopToItem = (itemId, shopName) => {
-    if (!shopName) return;
-    setItems(items.map(item => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          shops: [...(item.shops || []), { id: Date.now(), name: shopName, location: '', mapUrl: '', completed: false }]
-        };
-      }
-      return item;
-    }));
-  };
-
-  const toggleComplete = (id, shopId = null) => {
-    setItems(items.map(item => {
-      if (shopId && item.id === id) {
-        return {
-          ...item,
-          shops: item.shops.map(s => s.id === shopId ? { ...s, completed: !s.completed } : s)
-        };
-      } else if (!shopId && item.id === id) {
-        return { ...item, completed: !item.completed };
-      }
-      return item;
-    }));
-  };
-
-  const deleteItem = (id, shopId = null) => {
-    if (shopId) {
-      setItems(items.map(item => {
-        if (item.id === id) {
-          return { ...item, shops: item.shops.filter(s => s.id !== shopId) };
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK TRIP WISHLIST</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* カスタムセレクターのアニメーション */
+        #category-options { display: none; }
+        #category-options.show { display: block; animation: fadeIn 0.1s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        return item;
-      }));
-    } else {
-      setItems(items.filter(item => item.id !== id));
-    }
-  };
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 md:p-8">
+    <div class="max-w-2xl mx-auto">
+        <div class="pt-4"></div>
 
-  const filteredItems = activeTab === 'all' ? items : items.filter(item => item.category === activeTab);
+        <!-- Header Section -->
+        <div class="mb-10 text-center">
+            <h1 class="text-4xl font-black tracking-tighter italic text-slate-800 mb-2 uppercase">UK TRIP WISHLIST</h1>
+            <p class="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">Curate your perfect adventure</p>
+        </div>
 
-  const getCategoryIcon = (category, sizeClass = "w-5 h-5") => {
-    switch (category) {
-      case 'food': return <Utensils className={`${sizeClass} text-orange-500`} />;
-      case 'shop': return <Store className={`${sizeClass} text-purple-500`} />;
-      case 'spot': return <Camera className={`${sizeClass} text-green-500`} />;
-      case 'museum': return <Landmark className={`${sizeClass} text-blue-500`} />;
-      default: return <MapPin className={`${sizeClass} text-gray-500`} />;
-    }
-  };
-
-  const categoryOptions = [
-    { id: 'food', label: '料理', icon: <Utensils className="w-4 h-4 text-orange-500" /> },
-    { id: 'shop', label: 'お店', icon: <Store className="w-4 h-4 text-purple-500" /> },
-    { id: 'spot', label: '観光', icon: <Camera className="w-4 h-4 text-green-500" /> },
-    { id: 'museum', label: '文化', icon: <Landmark className="w-4 h-4 text-blue-500" /> }
-  ];
-
-  const categories = [
-    { id: 'all', label: 'すべて', icon: <FastForward className="w-4 h-4" /> },
-    ...categoryOptions
-  ];
-
-  const selectedCategory = categoryOptions.find(opt => opt.id === newItem.category);
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900">
-      <div className="max-w-2xl mx-auto">
-        <div className="pt-4"></div>
-
-        {/* 新規登録フォーム */}
-        <form onSubmit={addItem} className="bg-white p-6 rounded-2xl shadow-sm mb-8 border border-slate-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="flex flex-col gap-1 relative" ref={categoryRef}>
-              <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider">カテゴリー</label>
-              <button
-                type="button"
-                onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                className="w-full flex items-center justify-between px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm"
-              >
-                <div className="flex items-center gap-2">
-                  {selectedCategory?.icon}
-                  <span className="font-bold">{selectedCategory?.label}</span>
-                </div>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isCategoryOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isCategoryOpen && (
-                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                  {categoryOptions.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        setNewItem({ ...newItem, category: opt.id });
-                        setIsCategoryOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0 ${newItem.category === opt.id ? 'bg-blue-50/50' : ''}`}
-                    >
-                      {opt.icon}
-                      <span className="text-sm font-bold text-slate-700">{opt.label}</span>
+        <!-- 新規登録フォーム -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm mb-8 border border-slate-200">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <!-- カテゴリーセレクター -->
+                <div class="flex flex-col gap-1 relative" id="category-selector-container">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider">カテゴリー</label>
+                    <button id="category-trigger" onclick="toggleCategoryMenu(event)" class="w-full flex items-center justify-between px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm">
+                        <div id="selected-category-display" class="flex items-center gap-2">
+                            <!-- JSで挿入 -->
+                        </div>
+                        <i data-lucide="chevron-down" id="category-chevron" class="w-4 h-4 text-slate-400 transition-transform"></i>
                     </button>
-                  ))}
+                    
+                    <div id="category-options" class="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <!-- Options injected by JS -->
+                    </div>
                 </div>
-              )}
-            </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider">アイテム名</label>
-              <input
-                type="text"
-                placeholder="アイテム名を入力"
-                className="px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm bg-slate-50 font-medium"
-                value={newItem.name}
-                onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider">場所 (検索ワード)</label>
-              <input
-                type="text"
-                placeholder="例: London Bridge"
-                className="px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm bg-slate-50"
-                value={newItem.spot}
-                onChange={(e) => setNewItem({ ...newItem, spot: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider text-blue-500">Google Map URL (任意)</label>
-              <input
-                type="text"
-                placeholder="https://maps.app.goo.gl/..."
-                className="px-4 py-2.5 border border-blue-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm bg-blue-50/30"
-                value={newItem.mapUrl}
-                onChange={(e) => setNewItem({ ...newItem, mapUrl: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider mb-2 block">オプション</label>
-            <div className="flex gap-6">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newItem.isFree ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 group-hover:border-emerald-400'}`}>
-                  {newItem.isFree && <Check className="text-white w-3.5 h-3.5" strokeWidth={3} />}
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider">アイテム名</label>
+                    <input type="text" id="new-name" placeholder="アイテム名を入力" class="px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm bg-slate-50 font-medium">
                 </div>
-                <input type="checkbox" className="hidden" checked={newItem.isFree} onChange={(e) => setNewItem({...newItem, isFree: e.target.checked})} />
-                <span className="text-xs font-bold text-slate-600">無料スポット</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newItem.needsReservation ? 'bg-orange-500 border-orange-500' : 'border-slate-300 group-hover:border-orange-400'}`}>
-                  {newItem.needsReservation && <Check className="text-white w-3.5 h-3.5" strokeWidth={3} />}
-                </div>
-                <input type="checkbox" className="hidden" checked={newItem.needsReservation} onChange={(e) => setNewItem({...newItem, needsReservation: e.target.checked})} />
-                <span className="text-xs font-bold text-slate-600">予約必須</span>
-              </label>
             </div>
-          </div>
 
-          <button type="submit" className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900 transition-all shadow-lg flex items-center justify-center gap-2">
-            <Plus className="w-5 h-5" /> リストに追加
-          </button>
-        </form>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider">場所 (検索ワード)</label>
+                    <input type="text" id="new-spot" placeholder="例: London Bridge" class="px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm bg-slate-50">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] font-bold text-blue-500 uppercase ml-1 tracking-wider">Google Map URL (任意)</label>
+                    <input type="text" id="new-map-url" placeholder="https://maps.app.goo.gl/..." class="px-4 py-2.5 border border-blue-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 transition-all text-sm bg-blue-50/30">
+                </div>
+            </div>
 
-        {/* タブ切り替え */}
-        <div className="flex gap-3 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-          {categories.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-start gap-0.5 px-6 py-3 rounded-2xl font-bold transition-all border shrink-0 ${
-                activeTab === tab.id 
-                ? 'bg-blue-600 text-white border-blue-600 shadow-xl shadow-blue-100' 
-                : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {tab.icon}
-                <span className="text-sm">{tab.label}</span>
-              </div>
+            <div class="mb-6">
+                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-wider mb-2 block">オプション</label>
+                <div class="flex gap-6">
+                    <label class="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" id="new-is-free" class="hidden peer">
+                        <div class="w-5 h-5 rounded border border-slate-300 flex items-center justify-center transition-colors group-hover:border-emerald-400 peer-checked:bg-emerald-500 peer-checked:border-emerald-500">
+                            <i data-lucide="check" class="text-white w-3.5 h-3.5"></i>
+                        </div>
+                        <span class="text-xs font-bold text-slate-600">無料スポット</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" id="new-needs-res" class="hidden peer">
+                        <div class="w-5 h-5 rounded border border-slate-300 flex items-center justify-center transition-colors group-hover:border-orange-400 peer-checked:bg-orange-500 peer-checked:border-orange-500">
+                            <i data-lucide="check" class="text-white w-3.5 h-3.5"></i>
+                        </div>
+                        <span class="text-xs font-bold text-slate-600">予約必須</span>
+                    </label>
+                </div>
+            </div>
+
+            <button onclick="addItem()" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900 transition-all shadow-lg flex items-center justify-center gap-2">
+                <i data-lucide="plus" class="w-5 h-5"></i> リストに追加
             </button>
-          ))}
         </div>
 
-        {/* リスト表示 */}
-        <div className="space-y-4">
-          {filteredItems.map((item) => (
-            <div key={item.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-5 flex items-start gap-4">
-                <button onClick={() => toggleComplete(item.id)} className="mt-1 flex-shrink-0">
-                  {item.completed ? <CheckCircle2 className="text-emerald-500 w-6 h-6" /> : <Circle className="text-slate-200 w-6 h-6" />}
-                </button>
-                
-                <div className="flex-1 min-w-0">
-                  {editingId === item.id ? (
-                    <div className="space-y-3 bg-slate-50 p-4 rounded-xl animate-in fade-in duration-200 border border-slate-200">
-                      <div className="grid grid-cols-1 gap-3">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold text-slate-400">アイテム名</label>
-                          <input className="w-full font-bold text-sm p-2 border rounded-md" value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)} />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold text-slate-400">場所 (Map検索用)</label>
-                          <input className="w-full text-xs p-2 border rounded-md" value={item.spot} onChange={(e) => updateItem(item.id, 'spot', e.target.value)} />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold text-blue-500">Google Map URL</label>
-                          <input className="w-full text-xs p-2 border border-blue-200 rounded-md" placeholder="URLを直接指定" value={item.mapUrl || ''} onChange={(e) => updateItem(item.id, 'mapUrl', e.target.value)} />
-                        </div>
-                      </div>
-                      <div className="flex gap-4 border-t pt-3 border-slate-200">
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                          <input type="checkbox" checked={item.isFree} onChange={(e) => updateItem(item.id, 'isFree', e.target.checked)} /> 無料
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                          <input type="checkbox" checked={item.needsReservation} onChange={(e) => updateItem(item.id, 'needsReservation', e.target.checked)} /> 予約必須
-                        </label>
-                      </div>
-                      <button onClick={() => setEditingId(null)} className="w-full bg-slate-800 text-white py-2 rounded-md text-xs font-bold flex items-center justify-center gap-2">
-                        <Check className="w-3 h-3" /> 保存
-                      </button>
-                    </div>
-                  ) : (
-                    <div 
-                      className={item.category === 'food' ? 'cursor-pointer' : ''}
-                      onClick={() => item.category === 'food' && setExpandedId(expandedId === item.id ? null : item.id)}
-                    >
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="flex items-center gap-2">
-                          {getCategoryIcon(item.category, "w-4 h-4")}
-                          <span className={`font-bold text-slate-800 text-lg ${item.completed ? 'line-through text-slate-300' : ''}`}>
-                            {item.name}
-                          </span>
-                        </span>
-                        
-                        <div className="flex gap-1">
-                          {item.isFree && <span className="inline-flex items-center gap-0.5 text-[8px] font-black bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded uppercase tracking-wider"><HandCoins className="w-2.5 h-2.5" /> FREE</span>}
-                          {item.needsReservation && <span className="inline-flex items-center gap-0.5 text-[8px] font-black bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded uppercase tracking-wider"><Ticket className="w-2.5 h-2.5" /> RESERVATION</span>}
-                        </div>
-
-                        {item.category === 'food' && (
-                          <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ${item.shops?.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
-                            {item.shops?.length || 0} Options
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleOpenMap(item.name, item.spot, item.mapUrl); }}
-                          className="text-blue-500 text-xs font-semibold flex items-center gap-1 hover:text-blue-700 transition-colors ml-6"
-                        >
-                          {item.mapUrl ? <Link className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
-                          {item.spot || (item.mapUrl ? 'URLから開く' : '位置情報なし')}
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setEditingId(editingId === item.id ? null : item.id)} className={`transition-colors p-1 rounded hover:bg-slate-50 ${editingId === item.id ? 'text-blue-500' : 'text-slate-300 hover:text-blue-500'}`}>
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  {item.category === 'food' && (
-                    <button onClick={() => setExpandedId(expandedId === item.id ? null : item.id)} className={`transition-transform duration-200 ${expandedId === item.id ? 'rotate-180 text-blue-500' : 'text-slate-400'}`}>
-                      <ChevronDown className="w-6 h-6" />
-                    </button>
-                  )}
-                  <button onClick={() => deleteItem(item.id)} className="text-slate-200 hover:text-rose-500 transition-colors p-1 rounded hover:bg-slate-50">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 料理カテゴリーのみの候補リスト */}
-              {item.category === 'food' && expandedId === item.id && (
-                <div className="bg-slate-50 border-t border-slate-100 p-5 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 flex items-center gap-2">
-                    候補リスト / Menu & Shops
-                  </p>
-                  <div className="grid gap-3">
-                    {item.shops?.length > 0 ? (
-                      item.shops.map(shop => (
-                        <div key={shop.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm group/shop overflow-hidden">
-                          <div className="flex items-start gap-3">
-                            <button onClick={() => toggleComplete(item.id, shop.id)} className="mt-1">
-                              {shop.completed ? <CheckCircle2 className="text-emerald-400 w-5 h-5" /> : <Circle className="text-slate-200 w-5 h-5" />}
-                            </button>
-                            
-                            <div className="flex-1 min-w-0">
-                              {editingShopId === shop.id ? (
-                                <div className="space-y-2 py-1">
-                                  <div className="flex flex-col gap-1">
-                                    <label className="text-[8px] font-bold text-slate-400">店名 / メニュー</label>
-                                    <input className="w-full font-bold text-sm p-2 border rounded-md" value={shop.name} onChange={(e) => updateShop(item.id, shop.id, 'name', e.target.value)} autoFocus />
-                                  </div>
-                                  <div className="flex flex-col gap-1">
-                                    <label className="text-[8px] font-bold text-slate-400">場所 (Map検索用)</label>
-                                    <input className="w-full text-xs p-2 border rounded-md" placeholder="例: Soho" value={shop.location || ''} onChange={(e) => updateShop(item.id, shop.id, 'location', e.target.value)} />
-                                  </div>
-                                  <div className="flex flex-col gap-1">
-                                    <label className="text-[8px] font-bold text-blue-500">Google Map URL</label>
-                                    <input className="w-full text-xs p-2 border border-blue-100 rounded-md" placeholder="URLを貼り付け" value={shop.mapUrl || ''} onChange={(e) => updateShop(item.id, shop.id, 'mapUrl', e.target.value)} />
-                                  </div>
-                                  <button onClick={() => setEditingShopId(null)} className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1 rounded-md text-[10px] font-bold mt-1">完了</button>
-                                </div>
-                              ) : (
-                                <div className="flex flex-col">
-                                  <span className={`font-bold text-sm ${shop.completed ? 'line-through text-slate-300' : 'text-slate-700'}`}>{shop.name}</span>
-                                  <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                    <button 
-                                      onClick={() => handleOpenMap(shop.name, shop.location || item.spot, shop.mapUrl)} 
-                                      className="text-[10px] text-blue-400 hover:text-blue-600 flex items-center gap-1 font-bold"
-                                    >
-                                      {shop.mapUrl ? <Link className="w-2.5 h-2.5" /> : <MapPin className="w-2.5 h-2.5" />}
-                                      Mapで開く <ExternalLink className="w-2.5 h-2.5" />
-                                    </button>
-                                    <button onClick={() => setEditingShopId(shop.id)} className="text-[10px] text-slate-300 hover:text-slate-500 flex items-center gap-1 font-bold"><Edit3 className="w-2.5 h-2.5" /> 編集</button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            <button onClick={() => deleteItem(item.id, shop.id)} className="text-slate-200 hover:text-rose-400 opacity-0 group-hover/shop:opacity-100 transition-opacity p-1"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs font-bold">候補がまだありません</div>
-                    )}
-                  </div>
-                  <div className="pt-2">
-                    <input 
-                      type="text" 
-                      placeholder="具体的な店名やメニューを追加してEnter..." 
-                      className="w-full text-sm px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-400 transition-all bg-white"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          addShopToItem(item.id, e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+        <!-- タブ切り替え -->
+        <div class="flex gap-3 mb-8 overflow-x-auto pb-2 scrollbar-hide" id="tabs-container">
+            <!-- Tabs injected by JS -->
         </div>
 
-        {/* 進捗表示 */}
-        <div className="mt-12 p-8 bg-slate-900 rounded-[2rem] text-white shadow-2xl">
-          <div className="flex justify-between items-end mb-6">
-            <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mb-2">Adventure Log</p>
-              <h2 className="text-3xl font-black italic tracking-tighter">Your Journey</h2>
-            </div>
-            <div className="text-right">
-              <span className="text-4xl font-black text-blue-400 tabular-nums">
-                {items.length > 0 ? Math.round((items.filter(i => i.completed).length / items.length) * 100) : 0}%
-              </span>
-            </div>
-          </div>
-          <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden p-0.5">
-            <div className="bg-blue-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.5)]" style={{ width: `${items.length > 0 ? (items.filter(i => i.completed).length / items.length) * 100 : 0}%` }}></div>
-          </div>
+        <!-- リスト表示 -->
+        <div id="items-list" class="space-y-4">
+            <!-- Items injected by JS -->
         </div>
-      </div>
+
+        <!-- 進捗表示 -->
+        <div class="mt-12 p-8 bg-slate-900 rounded-[2rem] text-white shadow-2xl">
+            <div class="flex justify-between items-end mb-6">
+                <div>
+                    <p class="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mb-2">Adventure Log</p>
+                    <h2 class="text-3xl font-black italic tracking-tighter uppercase">Your Journey</h2>
+                </div>
+                <div class="text-right">
+                    <span id="progress-percent" class="text-4xl font-black text-blue-400 tabular-nums">0%</span>
+                </div>
+            </div>
+            <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden p-0.5">
+                <div id="progress-bar" class="bg-blue-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.5)]" style="width: 0%"></div>
+            </div>
+        </div>
     </div>
-  );
-};
 
-export default App;
+    <script>
+        // データ管理
+        let items = [
+            { id: 1, category: 'food', name: 'フィッシュ＆チップス', spot: 'London', mapUrl: '', completed: false, isFree: false, needsReservation: false, shops: [{ id: 101, name: 'Borough Market', location: 'London Bridge', mapUrl: '', completed: false }, { id: 102, name: 'Poppies Fish & Chips', location: 'Spitalfields', mapUrl: '', completed: false }] },
+            { id: 2, category: 'food', name: 'アフタヌーンティー', spot: 'London', mapUrl: '', completed: false, isFree: false, needsReservation: true, shops: [{ id: 201, name: 'Fortnum & Mason', location: 'Piccadilly', mapUrl: '', completed: false }, { id: 202, name: 'The Ritz', location: 'Green Park', mapUrl: '', completed: false }] },
+            { id: 3, category: 'museum', name: '大英博物館', spot: 'British Museum', mapUrl: 'https://maps.app.goo.gl/9R6v8zXmKzG3', completed: false, isFree: true, needsReservation: true }
+        ];
+
+        let activeTab = 'all';
+        let expandedId = null;
+        let editingId = null;
+        let editingShopId = null;
+        let selectedCategory = 'food';
+
+        const categoryOptions = [
+            { id: 'food', label: '料理', icon: 'utensils', color: 'text-orange-500' },
+            { id: 'shop', label: 'お店', icon: 'shopping-bag', color: 'text-purple-500' },
+            { id: 'spot', label: '観光', icon: 'camera', color: 'text-green-500' },
+            { id: 'museum', label: '文化', icon: 'landmark', color: 'text-blue-500' }
+        ];
+
+        // 初期化
+        function init() {
+            renderCategoryOptions();
+            renderSelectedCategory();
+            renderTabs();
+            renderItems();
+            
+            // 外部クリックでメニューを閉じる
+            window.addEventListener('click', (e) => {
+                if (!e.target.closest('#category-selector-container')) {
+                    const menu = document.getElementById('category-options');
+                    const chevron = document.getElementById('category-chevron');
+                    if(menu) menu.classList.remove('show');
+                    if(chevron) chevron.classList.remove('rotate-180');
+                }
+            });
+        }
+
+        // カテゴリーセレクター
+        function toggleCategoryMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('category-options');
+            const chevron = document.getElementById('category-chevron');
+            menu.classList.toggle('show');
+            chevron.classList.toggle('rotate-180');
+        }
+
+        function renderCategoryOptions() {
+            const container = document.getElementById('category-options');
+            container.innerHTML = categoryOptions.map(opt => `
+                <button onclick="selectCategory('${opt.id}')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0 ${selectedCategory === opt.id ? 'bg-blue-50/50' : ''}">
+                    <i data-lucide="${opt.icon}" class="w-4 h-4 ${opt.color}"></i>
+                    <span class="text-sm font-bold text-slate-700">${opt.label}</span>
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function selectCategory(id) {
+            selectedCategory = id;
+            renderSelectedCategory();
+            renderCategoryOptions();
+            document.getElementById('category-options').classList.remove('show');
+            document.getElementById('category-chevron').classList.remove('rotate-180');
+        }
+
+        function renderSelectedCategory() {
+            const display = document.getElementById('selected-category-display');
+            const opt = categoryOptions.find(o => o.id === selectedCategory);
+            display.innerHTML = `
+                <i data-lucide="${opt.icon}" class="w-4 h-4 ${opt.color}"></i>
+                <span class="font-bold">${opt.label}</span>
+            `;
+            lucide.createIcons();
+        }
+
+        // タブ
+        function renderTabs() {
+            const container = document.getElementById('tabs-container');
+            const tabs = [
+                { id: 'all', label: 'すべて', icon: 'zap' },
+                ...categoryOptions
+            ];
+            container.innerHTML = tabs.map(tab => `
+                <button onclick="setActiveTab('${tab.id}')" class="flex flex-col items-start gap-0.5 px-6 py-3 rounded-2xl font-bold transition-all border shrink-0 ${activeTab === tab.id ? 'bg-blue-600 text-white border-blue-600 shadow-xl shadow-blue-100' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="${tab.icon}" class="w-4 h-4"></i>
+                        <span class="text-sm">${tab.label}</span>
+                    </div>
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function setActiveTab(id) {
+            activeTab = id;
+            renderTabs();
+            renderItems();
+        }
+
+        // マップを開く
+        function handleOpenMap(name, location, savedUrl) {
+            if (savedUrl && savedUrl.trim() !== '') {
+                window.open(savedUrl.startsWith('http') ? savedUrl : `https://${savedUrl}`, '_blank');
+            } else {
+                const query = encodeURIComponent(`${name} ${location}`.trim());
+                window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+            }
+        }
+
+        // リスト描画
+        function renderItems() {
+            const list = document.getElementById('items-list');
+            const filtered = activeTab === 'all' ? items : items.filter(i => i.category === activeTab);
+            
+            list.innerHTML = filtered.map(item => {
+                const isExpanded = expandedId === item.id;
+                const isEditing = editingId === item.id;
+                const catInfo = categoryOptions.find(c => c.id === item.category);
+
+                return `
+                <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    <div class="p-5 flex items-start gap-4">
+                        <button onclick="toggleComplete(${item.id})" class="mt-1 flex-shrink-0">
+                            <i data-lucide="${item.completed ? 'check-circle-2' : 'circle'}" class="w-6 h-6 ${item.completed ? 'text-emerald-500' : 'text-slate-200'}"></i>
+                        </button>
+                        
+                        <div class="flex-1 min-w-0">
+                            ${isEditing ? `
+                                <div class="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div class="grid grid-cols-1 gap-3">
+                                        <div class="flex flex-col gap-1">
+                                            <label class="text-[10px] font-bold text-slate-400">アイテム名</label>
+                                            <input id="edit-name-${item.id}" class="w-full font-bold text-sm p-2 border rounded-md" value="${item.name}">
+                                        </div>
+                                        <div class="flex flex-col gap-1">
+                                            <label class="text-[10px] font-bold text-slate-400">場所 (Map検索用)</label>
+                                            <input id="edit-spot-${item.id}" class="w-full text-xs p-2 border rounded-md" value="${item.spot}">
+                                        </div>
+                                        <div class="flex flex-col gap-1">
+                                            <label class="text-[10px] font-bold text-blue-500">Google Map URL</label>
+                                            <input id="edit-url-${item.id}" class="w-full text-xs p-2 border border-blue-200 rounded-md" placeholder="URLを直接指定" value="${item.mapUrl || ''}">
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-4 border-t pt-3 border-slate-200">
+                                        <label class="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                            <input type="checkbox" id="edit-free-${item.id}" ${item.isFree ? 'checked' : ''}> 無料
+                                        </label>
+                                        <label class="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                            <input type="checkbox" id="edit-res-${item.id}" ${item.needsReservation ? 'checked' : ''}> 予約必須
+                                        </label>
+                                    </div>
+                                    <button onclick="saveEdit(${item.id})" class="w-full bg-slate-800 text-white py-2 rounded-md text-xs font-bold flex items-center justify-center gap-2">
+                                        <i data-lucide="check" class="w-3 h-3"></i> 保存
+                                    </button>
+                                </div>
+                            ` : `
+                                <div onclick="${item.category === 'food' ? `toggleExpand(${item.id})` : ''}" class="${item.category === 'food' ? 'cursor-pointer' : ''}">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <span class="flex items-center gap-2">
+                                            <i data-lucide="${catInfo.icon}" class="w-4 h-4 ${catInfo.color}"></i>
+                                            <span class="font-bold text-slate-800 text-lg ${item.completed ? 'line-through text-slate-300' : ''}">${item.name}</span>
+                                        </span>
+                                        <div class="flex gap-1">
+                                            ${item.isFree ? '<span class="inline-flex items-center gap-0.5 text-[8px] font-black bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded uppercase tracking-wider"><i data-lucide="hand-coins" class="w-2.5 h-2.5"></i> FREE</span>' : ''}
+                                            ${item.needsReservation ? '<span class="inline-flex items-center gap-0.5 text-[8px] font-black bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded uppercase tracking-wider"><i data-lucide="ticket" class="w-2.5 h-2.5"></i> RESERVATION</span>' : ''}
+                                        </div>
+                                        ${item.category === 'food' ? `<span class="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ${item.shops?.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}">${item.shops?.length || 0} Options</span>` : ''}
+                                    </div>
+                                    <button onclick="event.stopPropagation(); handleOpenMap('${item.name}', '${item.spot}', '${item.mapUrl}')" class="text-blue-500 text-xs font-semibold flex items-center gap-1 hover:text-blue-700 transition-colors ml-6">
+                                        <i data-lucide="${item.mapUrl ? 'link' : 'map-pin'}" class="w-3 h-3"></i> 
+                                        ${item.spot || (item.mapUrl ? 'URLから開く' : '位置情報なし')} 
+                                        <i data-lucide="external-link" class="w-3 h-3"></i>
+                                    </button>
+                                </div>
+                            `}
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <button onclick="toggleEdit(${item.id})" class="p-1 rounded hover:bg-slate-50 ${isEditing ? 'text-blue-500' : 'text-slate-300 hover:text-blue-500'}">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
+                            ${item.category === 'food' ? `
+                                <button onclick="toggleExpand(${item.id})" class="text-slate-400 ${isExpanded ? 'rotate-180 text-blue-500' : ''} transition-transform">
+                                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                                </button>
+                            ` : ''}
+                            <button onclick="deleteItem(${item.id})" class="text-slate-200 hover:text-rose-500 transition-colors p-1 rounded hover:bg-slate-50">
+                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    ${item.category === 'food' && isExpanded ? renderShops(item) : ''}
+                </div>
+                `;
+            }).join('');
+            
+            updateProgress();
+            lucide.createIcons();
+        }
+
+        function renderShops(item) {
+            return `
+            <div class="bg-slate-50 border-t border-slate-100 p-5 space-y-4">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 flex items-center gap-2">候補リスト / Menu & Shops</p>
+                <div class="grid gap-3">
+                    ${(item.shops || []).length > 0 ? item.shops.map(shop => {
+                        const isShopEditing = editingShopId === shop.id;
+                        return `
+                        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm group/shop">
+                            <div class="flex items-start gap-3">
+                                <button onclick="toggleShopComplete(${item.id}, ${shop.id})" class="mt-1">
+                                    <i data-lucide="${shop.completed ? 'check-circle-2' : 'circle'}" class="w-5 h-5 ${shop.completed ? 'text-emerald-400' : 'text-slate-200'}"></i>
+                                </button>
+                                <div class="flex-1 min-w-0">
+                                    ${isShopEditing ? `
+                                        <div class="space-y-2 py-1">
+                                            <div class="flex flex-col gap-1">
+                                                <label class="text-[8px] font-bold text-slate-400">店名 / メニュー</label>
+                                                <input id="edit-shop-name-${shop.id}" class="w-full font-bold text-sm p-2 border rounded-md" value="${shop.name}" autoFocus>
+                                            </div>
+                                            <div class="flex flex-col gap-1">
+                                                <label class="text-[8px] font-bold text-slate-400">場所 (Map検索用)</label>
+                                                <input id="edit-shop-spot-${shop.id}" class="w-full text-xs p-2 border rounded-md" value="${shop.location || ''}">
+                                            </div>
+                                            <div class="flex flex-col gap-1">
+                                                <label class="text-[8px] font-bold text-blue-500">Google Map URL</label>
+                                                <input id="edit-shop-url-${shop.id}" class="w-full text-xs p-2 border border-blue-100 rounded-md" value="${shop.mapUrl || ''}">
+                                            </div>
+                                            <button onclick="saveShopEdit(${item.id}, ${shop.id})" class="bg-blue-600 text-white px-3 py-1 rounded-md text-[10px] font-bold mt-1">完了</button>
+                                        </div>
+                                    ` : `
+                                        <div class="flex flex-col">
+                                            <span class="font-bold text-sm ${shop.completed ? 'line-through text-slate-300' : 'text-slate-700'}">${shop.name}</span>
+                                            <div class="flex items-center gap-3 mt-1 flex-wrap">
+                                                <button onclick="handleOpenMap('${shop.name}', '${shop.location || item.spot}', '${shop.mapUrl}')" class="text-[10px] text-blue-400 hover:text-blue-600 flex items-center gap-1 font-bold">
+                                                    <i data-lucide="${shop.mapUrl ? 'link' : 'map-pin'}" class="w-2.5 h-2.5"></i> Mapで開く <i data-lucide="external-link" class="w-2.5 h-2.5"></i>
+                                                </button>
+                                                <button onclick="toggleShopEdit(${shop.id})" class="text-[10px] text-slate-300 hover:text-slate-500 flex items-center gap-1 font-bold"><i data-lucide="edit-3" class="w-2.5 h-2.5"></i> 編集</button>
+                                            </div>
+                                        </div>
+                                    `}
+                                </div>
+                                <button onclick="deleteShop(${item.id}, ${shop.id})" class="text-slate-200 hover:text-rose-400 opacity-0 group-hover/shop:opacity-100 transition-opacity p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>
+                    `}).join('') : `
+                        <div class="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs font-bold">候補がまだありません</div>
+                    `}
+                </div>
+                <div class="pt-2">
+                    <input type="text" id="shop-input-${item.id}" onkeydown="if(event.key==='Enter') addShop(${item.id})" placeholder="具体的な店名やメニューを追加してEnter..." class="w-full text-sm px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-400 transition-all bg-white">
+                </div>
+            </div>
+            `;
+        }
+
+        // --- 操作関数 ---
+        function addItem() {
+            const name = document.getElementById('new-name').value;
+            if (!name) return;
+            
+            const item = {
+                id: Date.now(),
+                category: selectedCategory,
+                name: name,
+                spot: document.getElementById('new-spot').value,
+                mapUrl: document.getElementById('new-map-url').value,
+                isFree: document.getElementById('new-is-free').checked,
+                needsReservation: document.getElementById('new-needs-res').checked,
+                completed: false,
+                shops: selectedCategory === 'food' ? [] : undefined
+            };
+            
+            items.unshift(item);
+            
+            // クリア
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-spot').value = '';
+            document.getElementById('new-map-url').value = '';
+            document.getElementById('new-is-free').checked = false;
+            document.getElementById('new-needs-res').checked = false;
+            
+            renderItems();
+        }
+
+        function toggleComplete(id) {
+            items = items.map(i => i.id === id ? {...i, completed: !i.completed} : i);
+            renderItems();
+        }
+
+        function toggleShopComplete(itemId, shopId) {
+            items = items.map(item => {
+                if(item.id === itemId) {
+                    return {...item, shops: item.shops.map(s => s.id === shopId ? {...s, completed: !s.completed} : s)};
+                }
+                return item;
+            });
+            renderItems();
+        }
+
+        function deleteItem(id) {
+            items = items.filter(i => i.id !== id);
+            renderItems();
+        }
+
+        function deleteShop(itemId, shopId) {
+            items = items.map(item => {
+                if(item.id === itemId) {
+                    return {...item, shops: item.shops.filter(s => s.id !== shopId)};
+                }
+                return item;
+            });
+            renderItems();
+        }
+
+        function toggleExpand(id) {
+            expandedId = expandedId === id ? null : id;
+            renderItems();
+        }
+
+        function toggleEdit(id) {
+            editingId = editingId === id ? null : id;
+            renderItems();
+        }
+
+        function saveEdit(id) {
+            items = items.map(i => {
+                if(i.id === id) {
+                    return {
+                        ...i,
+                        name: document.getElementById(`edit-name-${id}`).value,
+                        spot: document.getElementById(`edit-spot-${id}`).value,
+                        mapUrl: document.getElementById(`edit-url-${id}`).value,
+                        isFree: document.getElementById(`edit-free-${id}`).checked,
+                        needsReservation: document.getElementById(`edit-res-${id}`).checked
+                    };
+                }
+                return i;
+            });
+            editingId = null;
+            renderItems();
+        }
+
+        function toggleShopEdit(shopId) {
+            editingShopId = editingShopId === shopId ? null : shopId;
+            renderItems();
+        }
+
+        function saveShopEdit(itemId, shopId) {
+            const name = document.getElementById(`edit-shop-name-${shopId}`).value;
+            const spot = document.getElementById(`edit-shop-spot-${shopId}`).value;
+            const url = document.getElementById(`edit-shop-url-${shopId}`).value;
+            
+            items = items.map(item => {
+                if(item.id === itemId) {
+                    return {...item, shops: item.shops.map(s => s.id === shopId ? {...s, name, location: spot, mapUrl: url} : s)};
+                }
+                return item;
+            });
+            editingShopId = null;
+            renderItems();
+        }
+
+        function addShop(itemId) {
+            const input = document.getElementById(`shop-input-${itemId}`);
+            if(!input.value.trim()) return;
+            
+            items = items.map(item => {
+                if(item.id === itemId) {
+                    return {
+                        ...item,
+                        shops: [...(item.shops || []), { id: Date.now(), name: input.value.trim(), location: '', mapUrl: '', completed: false }]
+                    };
+                }
+                return item;
+            });
+            input.value = '';
+            renderItems();
+        }
+
+        function updateProgress() {
+            const total = items.length;
+            const done = items.filter(i => i.completed).length;
+            const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+            
+            document.getElementById('progress-percent').innerText = `${percent}%`;
+            document.getElementById('progress-bar').style.width = `${percent}%`;
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
